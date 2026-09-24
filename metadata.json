@@ -1,0 +1,6 @@
+{
+  "name": "WordbitX",
+  "description": "WordbitX - Production-ready multi-tenant CRM with sales pipeline, leads, customer management, support ticketing, and revenue analytics.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
