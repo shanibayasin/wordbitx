@@ -68,7 +68,7 @@ model Deal {
   id             String       @id @default(cuid())
   title          String
   value          Float
-  stage          DealStage    @default(QUALIFIED)
+  stage          DealStage    @default(NEW)
   probability    Int          @default(50)
   organizationId String
   organization   Organization @relation(fields: [organizationId], references: [id])
@@ -81,6 +81,7 @@ model Deal {
 }
 
 enum DealStage {
+  NEW
   QUALIFIED
   PROPOSAL
   NEGOTIATION

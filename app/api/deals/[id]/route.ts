@@ -36,10 +36,42 @@ export async function PUT(request: Request, { params }: { params: { id: string }
 
     try {
       await connectToDatabase();
+      const current: any = await Deal.findById(params.id).lean();
+      if (!current) {
+        return NextResponse.json({ error: 'Deal not found' }, { status: 404 });
+      }
+      const changedAt = new Date();
+      const stageChanged = Boolean(validation.data.stage && validation.data.stage !== current.stage);
+      const updateData: any = { ...validation.data, updatedAt: changedAt, lastActivityAt: changedAt };
+      if (stageChanged) {
+        const nextStage = validation.data.stage!;
+        const actor = typeof body.changedBy === 'string' ? body.changedBy : 'System';
+        updateData.status = nextStage === 'WON' ? 'WON' : nextStage === 'LOST' ? 'LOST' : 'OPEN';
+        updateData.probability = nextStage === 'WON' ? 100 : nextStage === 'LOST' ? 0 : validation.data.probability ?? current.probability;
+        updateData.stageEnteredAt = changedAt;
+        updateData.stageHistory = [...(current.stageHistory || []), {
+          id: `stage_${changedAt.getTime()}`,
+          fromStage: current.stage,
+          toStage: nextStage,
+          changedBy: actor,
+          changedAt,
+          timeInPreviousStageMs: Math.max(0, changedAt.getTime() - new Date(current.stageEnteredAt || current.updatedAt || current.createdAt).getTime()),
+          lossReason: validation.data.lossReason || null,
+          lossNotes: validation.data.lossNotes || null,
+        }];
+        updateData.activities = [{
+          id: `activity_${changedAt.getTime()}`,
+          type: nextStage === 'WON' ? 'WON' : nextStage === 'LOST' ? 'LOST' : 'STAGE_CHANGED',
+          description: nextStage === 'LOST' ? `Deal marked lost: ${validation.data.lossReason}` : nextStage === 'WON' ? 'Deal marked won' : `Stage changed from ${current.stage} to ${nextStage}`,
+          user: actor,
+          relatedEntity: 'Stage',
+          createdAt: changedAt,
+        }, ...(current.activities || [])];
+      }
       const updated = await Deal.findByIdAndUpdate(
         params.id,
-        { ...validation.data, updatedAt: new Date() },
-        { new: true }
+        updateData,
+        { new: true, runValidators: true }
       )
         .populate('customerId', 'name company email phone avatarUrl')
         .populate('assignedToId', 'name email role avatarUrl')

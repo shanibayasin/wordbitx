@@ -17,11 +17,8 @@ export async function GET(request: Request) {
         .lean();
 
       const formatted = deals.map((d: any) => ({
+        ...d,
         id: d._id.toString(),
-        title: d.title,
-        value: d.value,
-        stage: d.stage,
-        probability: d.probability,
         organizationId: d.organizationId.toString(),
         customerId: d.customerId?._id?.toString() || null,
         customer: d.customerId || null,
@@ -52,11 +49,17 @@ export async function POST(request: Request) {
 
     try {
       await connectToDatabase();
+      const createdAt = new Date();
       const newDeal: any = await Deal.create({
         ...validation.data,
         assignedToId: validation.data.assignedToId || null,
         customerId: validation.data.customerId || null,
         organizationId: orgId,
+        status: validation.data.stage === 'WON' ? 'WON' : validation.data.stage === 'LOST' ? 'LOST' : 'OPEN',
+        stageEnteredAt: createdAt,
+        lastActivityAt: createdAt,
+        stageHistory: [{ id: `stage_${createdAt.getTime()}`, fromStage: null, toStage: validation.data.stage, changedBy: body.createdBy || 'System', changedAt: createdAt, timeInPreviousStageMs: 0 }],
+        activities: [{ id: `activity_${createdAt.getTime()}`, type: 'CREATED', description: 'Deal created', user: body.createdBy || 'System', relatedEntity: 'Deal', createdAt }],
       });
 
       return NextResponse.json(
@@ -64,6 +67,9 @@ export async function POST(request: Request) {
           id: newDeal._id.toString(),
           ...validation.data,
           organizationId: orgId,
+          status: newDeal.status,
+          stageHistory: newDeal.stageHistory,
+          activities: newDeal.activities,
           createdAt: newDeal.createdAt,
           updatedAt: newDeal.updatedAt,
         },

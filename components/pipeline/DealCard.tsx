@@ -3,15 +3,19 @@
 import React from 'react';
 import { useDraggable } from '@dnd-kit/core';
 import { Deal, User, Customer, DealStage } from '../../types/index.ts';
-import { formatCurrency } from '../../lib/utils.ts';
-import { Building, DollarSign, UserCheck, GripVertical } from 'lucide-react';
+import { formatCurrency, formatDate } from '../../lib/utils.ts';
+import { Badge } from '../ui/Badge.tsx';
+import { Building, DollarSign, UserCheck, GripVertical, Pencil } from 'lucide-react';
 
 interface DealCardProps {
   deal: Deal;
   customer?: Customer | null;
   assignedUser?: User | null;
   isOverlay?: boolean;
+  isSelected?: boolean;
+  onToggleSelect?: (dealId: string) => void;
   onView?: (dealId: string) => void;
+  onEdit?: () => void;
   onAdvance?: (dealId: string, currentStage: DealStage) => void;
 }
 
@@ -20,7 +24,10 @@ export function DealCard({
   customer,
   assignedUser,
   isOverlay = false,
+  isSelected = false,
+  onToggleSelect,
   onView,
+  onEdit,
   onAdvance,
 }: DealCardProps) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
@@ -50,21 +57,16 @@ export function DealCard({
     >
       <div className="flex items-start justify-between gap-1 mb-1.5">
         <h4
-          onClick={() => onView && onView(deal.id)}
+          onClick={() => onView?.(deal.id)}
           className="text-xs font-bold text-slate-900 dark:text-white line-clamp-2 cursor-pointer hover:text-indigo-600 transition"
         >
           {deal.title}
         </h4>
-        {!isOverlay && (
-          <div
-            {...attributes}
-            {...listeners}
-            className="text-slate-400 hover:text-slate-600 cursor-grab active:cursor-grabbing p-0.5 rounded shrink-0"
-            title="Drag opportunity"
-          >
-            <GripVertical className="h-3.5 w-3.5" />
-          </div>
-        )}
+        {!isOverlay && <div className="flex shrink-0 items-center gap-0.5">
+          {onToggleSelect && <input aria-label={`Select ${deal.title}`} type="checkbox" checked={isSelected} onChange={() => onToggleSelect(deal.id)} />}
+          {onEdit && <button type="button" title="Edit deal" onClick={() => onEdit()} className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-indigo-600 dark:hover:bg-slate-800"><Pencil className="h-3 w-3" /></button>}
+          <button type="button" {...attributes} {...listeners} className="cursor-grab rounded p-1 text-slate-400 hover:text-slate-600 active:cursor-grabbing" title="Drag deal"><GripVertical className="h-3.5 w-3.5" /></button>
+        </div>}
       </div>
 
       {customer && (
@@ -73,6 +75,11 @@ export function DealCard({
           <span className="truncate">{customer.company || customer.name}</span>
         </div>
       )}
+
+      <div className="mb-2 flex flex-wrap items-center gap-1.5">
+        <Badge variant={deal.priority === 'URGENT' ? 'destructive' : deal.priority === 'HIGH' ? 'warning' : 'secondary'} className="px-1.5 py-0 text-[9px]">{deal.priority || 'MEDIUM'}</Badge>
+        {deal.expectedCloseDate && <span className="text-[10px] text-slate-400">Close {formatDate(deal.expectedCloseDate)}</span>}
+      </div>
 
       {/* Progress & Probability */}
       <div className="mb-2.5">
@@ -103,9 +110,13 @@ export function DealCard({
         {assignedUser && (
           <div className="flex items-center space-x-1 text-[10px] text-slate-400 font-medium">
             <UserCheck className="h-3 w-3" />
-            <span className="truncate max-w-[80px]">{assignedUser.name.split(' ')[0]}</span>
+            <span className="truncate max-w-20">{assignedUser.name.split(' ')[0]}</span>
           </div>
         )}
+      </div>
+      <div className="mt-2 space-y-0.5 text-[10px] text-slate-400">
+        {deal.nextFollowUp && <p>Follow-up · {formatDate(deal.nextFollowUp)}</p>}
+        <p>Last activity · {formatDate(deal.lastActivityAt || deal.updatedAt)}</p>
       </div>
 
       {/* Advance button */}
@@ -121,6 +132,7 @@ export function DealCard({
           <span>Advance Stage →</span>
         </button>
       )}
+      {!isOverlay && deal.stage !== 'WON' && deal.stage !== 'LOST' && onAdvance && <div className="mt-1 flex gap-1"><button type="button" onClick={(event) => { event.stopPropagation(); onAdvance(deal.id, 'WON'); }} className="flex-1 rounded border border-emerald-200 px-1 py-1 text-[9px] font-semibold text-emerald-700 hover:bg-emerald-50 dark:border-emerald-900 dark:text-emerald-300">Mark won</button><button type="button" onClick={(event) => { event.stopPropagation(); onAdvance(deal.id, 'LOST'); }} className="flex-1 rounded border border-rose-200 px-1 py-1 text-[9px] font-semibold text-rose-700 hover:bg-rose-50 dark:border-rose-900 dark:text-rose-300">Mark lost</button></div>}
     </div>
   );
 }

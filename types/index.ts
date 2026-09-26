@@ -4,7 +4,7 @@ export type LeadStatus = 'NEW' | 'CONTACTED' | 'QUALIFIED' | 'PROPOSAL' | 'NEGOT
 
 export type LeadPriority = 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT';
 
-export type DealStage = 'QUALIFIED' | 'PROPOSAL' | 'NEGOTIATION' | 'WON' | 'LOST';
+export type DealStage = 'NEW' | 'QUALIFIED' | 'PROPOSAL' | 'NEGOTIATION' | 'WON' | 'LOST';
 
 export type TicketStatus = 'OPEN' | 'IN_PROGRESS' | 'WAITING' | 'RESOLVED';
 
@@ -79,8 +79,29 @@ export interface Deal {
   _id?: string;
   title: string;
   value: number;
+  currency?: string;
+  company?: string | null;
+  pipeline?: string;
   stage: DealStage;
   probability: number;
+  priority?: Priority;
+  status?: 'OPEN' | 'WON' | 'LOST';
+  assignedTeam?: string | null;
+  source?: string | null;
+  expectedCloseDate?: Date | string | null;
+  nextFollowUp?: Date | string | null;
+  stageEnteredAt?: Date | string | null;
+  lastActivityAt?: Date | string | null;
+  tags?: string[];
+  notes?: string | null;
+  lossReason?: string | null;
+  lossNotes?: string | null;
+  stageHistory?: DealStageHistory[];
+  activities?: DealActivity[];
+  tasks?: Task[];
+  orderHandoff?: DealOrderHandoff;
+  dealNotes?: DealNote[];
+  calls?: DealCall[];
   organizationId: string;
   organization?: Organization;
   assignedToId: string | null;
@@ -89,6 +110,52 @@ export interface Deal {
   customer?: Customer | null;
   createdAt: Date | string;
   updatedAt: Date | string;
+}
+
+export interface DealStageHistory {
+  id: string;
+  fromStage: DealStage | null;
+  toStage: DealStage;
+  changedBy: string;
+  changedAt: Date | string;
+  timeInPreviousStageMs: number;
+  lossReason?: string | null;
+  lossNotes?: string | null;
+}
+
+export interface DealActivity {
+  id: string;
+  type: 'CREATED' | 'UPDATED' | 'STAGE_CHANGED' | 'VALUE_CHANGED' | 'PROBABILITY_CHANGED' | 'CUSTOMER_CHANGED' | 'TASK_CREATED' | 'CALL_COMPLETED' | 'NOTE_ADDED' | 'WON' | 'LOST';
+  description: string;
+  user: string;
+  relatedEntity?: string;
+  createdAt: Date | string;
+}
+
+export interface DealNote {
+  id: string;
+  content: string;
+  author: string;
+  createdAt: Date | string;
+}
+
+export interface DealCall {
+  id: string;
+  date: Date | string;
+  agent: string;
+  type: 'Incoming' | 'Outgoing' | 'Missed' | 'Callback';
+  duration: string;
+  outcome: string;
+  notes: string;
+}
+
+export interface DealOrderHandoff {
+  id: string;
+  customerId: string;
+  amount: number;
+  currency: string;
+  status: 'DRAFT';
+  createdAt: Date | string;
 }
 
 export interface Customer {
@@ -183,6 +250,9 @@ export interface Task {
   organization?: Organization;
   assignedToId: string | null;
   customerId?: string | null;
+  dealId?: string | null;
+  priority?: Priority;
+  notes?: string | null;
   assignedTo?: User | null;
   createdAt: Date | string;
 }

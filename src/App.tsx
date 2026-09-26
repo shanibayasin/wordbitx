@@ -8,7 +8,8 @@ import { RevenueChart } from '../components/dashboard/RevenueChart.tsx';
 import { PipelineChart } from '../components/dashboard/PipelineChart.tsx';
 import { LeadTable } from '../components/leads/LeadTable.tsx';
 import { LeadForm } from '../components/leads/LeadForm.tsx';
-import { PipelineBoard } from '../components/pipeline/PipelineBoard.tsx';
+import { SalesPipeline } from '../components/pipeline/SalesPipeline.tsx';
+import { DealDetails } from '../components/pipeline/DealDetails.tsx';
 import { CustomerTable } from '../components/customers/CustomerTable.tsx';
 import { CustomerForm } from '../components/customers/CustomerForm.tsx';
 import { CustomerDetails } from '../components/customers/CustomerDetails.tsx';
@@ -125,7 +126,15 @@ export default function App() {
   // Core Data Collections (Scoping by Organization)
   const [users, setUsers] = useState<User[]>(SEED_USERS);
   const [leads, setLeads] = useState<Lead[]>(SEED_LEADS);
-  const [deals, setDeals] = useState<Deal[]>(SEED_DEALS);
+  const [deals, setDeals] = useState<Deal[]>(() => {
+    try {
+      const savedDeals = window.localStorage.getItem('wordbitx:deals');
+      const parsedDeals = savedDeals ? JSON.parse(savedDeals) : null;
+      return Array.isArray(parsedDeals) ? parsedDeals as Deal[] : SEED_DEALS;
+    } catch {
+      return SEED_DEALS;
+    }
+  });
   const [customers, setCustomers] = useState<Customer[]>(() => {
     try {
       const storedCustomers = window.localStorage.getItem('wordbitx:customers');
@@ -175,6 +184,10 @@ export default function App() {
     window.localStorage.setItem('wordbitx:customers', JSON.stringify(customers));
   }, [customers]);
 
+  useEffect(() => {
+    window.localStorage.setItem('wordbitx:deals', JSON.stringify(deals));
+  }, [deals]);
+
   // Navigate helper
   const navigate = (path: string, param?: string) => {
     setCurrentRoute(path);
@@ -221,25 +234,144 @@ export default function App() {
   };
 
   // Deals
-  const handleUpdateDealStage = (dealId: string, newStage: DealStage) => {
-    setDeals((prev) =>
-      prev.map((d) =>
-        d.id === dealId ? { ...d, stage: newStage, updatedAt: new Date() } : d
-      )
-    );
+  const handleUpdateDealStage = (dealId: string, newStage: DealStage, change?: { lossReason?: string; lossNotes?: string; customerId?: string | null }) => {
+    const changedAt = new Date();
+    const deal = scopedDeals.find((item) => item.id === dealId);
+    if (!deal || deal.stage === newStage) return;
+    const stageHistory = {
+      id: `stage_${Date.now()}`,
+      fromStage: deal.stage,
+      toStage: newStage,
+      changedBy: currentUser.name,
+      changedAt,
+      timeInPreviousStageMs: Math.max(0, changedAt.getTime() - new Date(deal.stageEnteredAt || deal.updatedAt || deal.createdAt).getTime()),
+      lossReason: change?.lossReason || null,
+      lossNotes: change?.lossNotes || null,
+    };
+    const activity = {
+      id: `activity_${Date.now()}`,
+      type: newStage === 'WON' ? 'WON' as const : newStage === 'LOST' ? 'LOST' as const : 'STAGE_CHANGED' as const,
+      description: newStage === 'LOST'
+        ? `Deal marked lost: ${change?.lossReason || 'Reason not provided'}`
+        : newStage === 'WON' ? 'Deal marked won' : `Stage changed from ${deal.stage} to ${newStage}`,
+      user: currentUser.name,
+      relatedEntity: 'Stage',
+      createdAt: changedAt,
+    };
+    setDeals((prev) => prev.map((item) => item.id === dealId ? {
+      ...item,
+      ...change,
+      stage: newStage,
+      status: newStage === 'WON' ? 'WON' : newStage === 'LOST' ? 'LOST' : 'OPEN',
+      probability: newStage === 'WON' ? 100 : newStage === 'LOST' ? 0 : item.probability,
+      stageEnteredAt: changedAt,
+      stageHistory: [...(item.stageHistory || []), stageHistory],
+      activities: [activity, ...(item.activities || [])],
+      updatedAt: changedAt,
+      lastActivityAt: changedAt,
+    } : item));
     toast.success(`Deal moved to stage: ${newStage}`);
   };
 
   const handleCreateDeal = (data: any) => {
+    const createdAt = new Date();
     const newDeal: Deal = {
       id: `deal_${Date.now()}`,
       ...data,
+      company: data.company || scopedCustomers.find((customer) => customer.id === data.customerId)?.company || null,
       organizationId: currentOrgId,
-      createdAt: new Date(),
-      updatedAt: new Date(),
+      createdAt,
+      updatedAt: createdAt,
+      stageEnteredAt: createdAt,
+      lastActivityAt: createdAt,
+      status: data.stage === 'WON' ? 'WON' : data.stage === 'LOST' ? 'LOST' : 'OPEN',
+      stageHistory: [{ id: `stage_${Date.now()}`, fromStage: null, toStage: data.stage, changedBy: currentUser.name, changedAt: createdAt, timeInPreviousStageMs: 0 }],
+      activities: [{ id: `activity_${Date.now()}`, type: 'CREATED', description: 'Deal created', user: currentUser.name, relatedEntity: 'Deal', createdAt }],
     };
     setDeals((prev) => [newDeal, ...prev]);
     toast.success('Opportunity created in pipeline');
+  };
+
+  const handleSaveDeal = async (dealId: string, data: any) => {
+    const existing = scopedDeals.find((deal) => deal.id === dealId);
+    if (!existing) return;
+    const updatedAt = new Date();
+    const events = [];
+    if (existing.value !== data.value) events.push({ type: 'VALUE_CHANGED' as const, description: `Deal value changed from ${formatCurrency(existing.value)} to ${formatCurrency(data.value)}` });
+    if (existing.probability !== data.probability) events.push({ type: 'PROBABILITY_CHANGED' as const, description: `Probability changed from ${existing.probability}% to ${data.probability}%` });
+    if (existing.customerId !== data.customerId) events.push({ type: 'CUSTOMER_CHANGED' as const, description: 'Deal customer updated' });
+    if (existing.stage !== data.stage) events.push({ type: 'STAGE_CHANGED' as const, description: `Stage changed from ${existing.stage} to ${data.stage}` });
+    if (!events.length) events.push({ type: 'UPDATED' as const, description: 'Deal details updated' });
+    const activities = events.map((event, index) => ({ id: `activity_${Date.now()}_${index}`, ...event, user: currentUser.name, relatedEntity: event.type === 'CUSTOMER_CHANGED' ? 'Customer' : 'Deal', createdAt: updatedAt }));
+    const stageHistory = existing.stage !== data.stage ? {
+      id: `stage_${Date.now()}`,
+      fromStage: existing.stage,
+      toStage: data.stage,
+      changedBy: currentUser.name,
+      changedAt: updatedAt,
+      timeInPreviousStageMs: Math.max(0, updatedAt.getTime() - new Date(existing.stageEnteredAt || existing.updatedAt || existing.createdAt).getTime()),
+    } : null;
+    setDeals((prev) => prev.map((deal) => deal.id === dealId ? {
+      ...deal, ...data, id: deal.id, organizationId: deal.organizationId, createdAt: deal.createdAt,
+      company: data.company || scopedCustomers.find((customer) => customer.id === data.customerId)?.company || null,
+      status: data.stage === 'WON' ? 'WON' : data.stage === 'LOST' ? 'LOST' : 'OPEN',
+      stageEnteredAt: stageHistory ? updatedAt : deal.stageEnteredAt,
+      stageHistory: stageHistory ? [...(deal.stageHistory || []), stageHistory] : deal.stageHistory || [],
+      activities: [...activities, ...(deal.activities || [])],
+      updatedAt, lastActivityAt: updatedAt,
+    } : deal));
+    toast.success('Deal updated');
+  };
+
+  const handleBulkUpdateDeals = (ids: string[], updates: Partial<Deal>) => {
+    const changedAt = new Date();
+    setDeals((prev) => prev.map((deal) => {
+      if (!ids.includes(deal.id)) return deal;
+      const targetStage = updates.stage || (updates.status === 'OPEN' && (deal.stage === 'WON' || deal.stage === 'LOST') ? 'NEW' : deal.stage);
+      const stageChanged = targetStage !== deal.stage;
+      if (!stageChanged) return { ...deal, ...updates, updatedAt: changedAt };
+      const history = { id: `stage_${Date.now()}_${deal.id}`, fromStage: deal.stage, toStage: targetStage, changedBy: currentUser.name, changedAt, timeInPreviousStageMs: Math.max(0, changedAt.getTime() - new Date(deal.stageEnteredAt || deal.updatedAt || deal.createdAt).getTime()) };
+      const activity = { id: `activity_${Date.now()}_${deal.id}`, type: targetStage === 'WON' ? 'WON' as const : targetStage === 'LOST' ? 'LOST' as const : 'STAGE_CHANGED' as const, description: targetStage === 'LOST' ? `Deal marked lost: ${updates.lossReason || 'Reason not provided'}` : targetStage === 'WON' ? 'Deal marked won' : `Stage changed from ${deal.stage} to ${targetStage}`, user: currentUser.name, relatedEntity: 'Stage', createdAt: changedAt };
+      return { ...deal, ...updates, stage: targetStage, status: updates.status || (targetStage === 'WON' ? 'WON' : targetStage === 'LOST' ? 'LOST' : 'OPEN'), probability: updates.probability ?? (targetStage === 'WON' ? 100 : targetStage === 'LOST' ? 0 : deal.probability), stageHistory: [...(deal.stageHistory || []), history], activities: [activity, ...(deal.activities || [])], stageEnteredAt: changedAt, updatedAt: changedAt, lastActivityAt: changedAt };
+    }));
+    toast.success(`Updated ${ids.length} deals`);
+  };
+
+  const handleDeleteDeals = (ids: string[]) => {
+    setDeals((prev) => prev.filter((deal) => !ids.includes(deal.id)));
+    toast.success(`Deleted ${ids.length} deals`);
+  };
+
+  const handleCreateDealTask = (data: { title: string; assignedToId: string | null; priority: Task['priority']; dueDate: Date | null; notes: string; dealId: string }) => {
+    const createdAt = new Date();
+    const task: Task = { id: `task_${Date.now()}`, ...data, completed: false, organizationId: currentOrgId, createdAt };
+    setTasks((prev) => [task, ...prev]);
+    setDeals((prev) => prev.map((deal) => deal.id === data.dealId ? {
+      ...deal,
+      tasks: [task, ...(deal.tasks || [])],
+      activities: [{ id: `activity_${Date.now()}`, type: 'TASK_CREATED', description: `Task created: ${data.title}`, user: currentUser.name, relatedEntity: data.title, createdAt }, ...(deal.activities || [])],
+      updatedAt: createdAt,
+      lastActivityAt: createdAt,
+    } : deal));
+    toast.success('Deal task created');
+  };
+
+  const handleCreateOrderFromDeal = (deal: Deal) => {
+    const createdAt = new Date();
+    setDeals((prev) => prev.map((item) => {
+      if (item.id !== deal.id || item.orderHandoff) return item;
+      const handoff = {
+        id: `order_draft_${Date.now()}`,
+        customerId: deal.customerId || item.customerId || '',
+        amount: deal.value,
+        currency: deal.currency || 'USD',
+        status: 'DRAFT' as const,
+        createdAt,
+      };
+      const activity = { id: `activity_${Date.now()}`, type: 'UPDATED' as const, description: 'Draft order handoff created from won deal', user: currentUser.name, relatedEntity: 'Order Handoff', createdAt };
+      return { ...item, stage: 'WON', status: 'WON', probability: 100, customerId: handoff.customerId || item.customerId, orderHandoff: handoff, activities: [activity, ...(item.activities || [])], updatedAt: createdAt, lastActivityAt: createdAt };
+    }));
+    toast.success(`Draft order handoff created from ${deal.title}`);
   };
 
   // Customers
@@ -934,85 +1066,42 @@ export default function App() {
 
           {/* VIEW: Pipeline */}
           {currentRoute === '/pipeline' && (
-            <PipelineBoard
+            <SalesPipeline
               deals={scopedDeals}
               users={scopedUsers}
               customers={scopedCustomers}
+              leadCount={scopedLeads.length}
               onUpdateDealStage={handleUpdateDealStage}
               onCreateDeal={handleCreateDeal}
+              onSaveDeal={handleSaveDeal}
+              onBulkUpdateDeals={handleBulkUpdateDeals}
+              onDeleteDeals={handleDeleteDeals}
+              onCreateOrderFromDeal={handleCreateOrderFromDeal}
               onViewDeal={(id) => navigate('/deals/detail', id)}
             />
           )}
 
           {/* VIEW: Deal Detail */}
-          {currentRoute === '/deals/detail' && (
-            <div className="space-y-6 max-w-5xl mx-auto">
-              <div className="flex items-center justify-between">
-                <Button variant="ghost" onClick={() => navigate('/pipeline')} className="space-x-1.5">
-                  <ArrowLeft className="h-4 w-4" />
-                  <span>Back to Pipeline</span>
-                </Button>
-              </div>
-
-              {(() => {
-                const deal = scopedDeals.find((d) => d.id === routeParam) || scopedDeals[0];
-                if (!deal) return <div>Deal not found</div>;
-                const customer = scopedCustomers.find((c) => c.id === deal.customerId);
-                const rep = scopedUsers.find((u) => u.id === deal.assignedToId);
-                return (
-                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
-                    <Card className="lg:col-span-2">
-                      <CardHeader className="flex flex-row items-center justify-between pb-2">
-                        <div>
-                          <CardTitle className="text-lg sm:text-xl">{deal.title}</CardTitle>
-                          <p className="text-xs text-slate-400 mt-1">Opportunity ID: {deal.id}</p>
-                        </div>
-                        <Badge variant="warning">{deal.stage}</Badge>
-                      </CardHeader>
-                      <CardContent className="space-y-4 sm:space-y-6 pt-4">
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 text-sm">
-                          <div className="flex items-center space-x-2 text-slate-600 dark:text-slate-300">
-                            <Building className="h-4 w-4 text-slate-400 shrink-0" />
-                            <span className="truncate">Customer: {customer?.company || customer?.name || 'Direct Account'}</span>
-                          </div>
-                          <div className="flex items-center space-x-2 text-slate-600 dark:text-slate-300">
-                            <DollarSign className="h-4 w-4 text-slate-400 shrink-0" />
-                            <span className="truncate">Contract Value: {formatCurrency(deal.value)}</span>
-                          </div>
-                          <div className="flex items-center space-x-2 text-slate-600 dark:text-slate-300">
-                            <Calendar className="h-4 w-4 text-slate-400 shrink-0" />
-                            <span className="truncate">Created: {formatDate(deal.createdAt)}</span>
-                          </div>
-                          <div className="flex items-center space-x-2 text-slate-600 dark:text-slate-300">
-                            <UserCheck className="h-4 w-4 text-slate-400 shrink-0" />
-                            <span className="truncate">Account Exec: {rep?.name || 'Unassigned'}</span>
-                          </div>
-                        </div>
-                      </CardContent>
-                    </Card>
-
-                    <Card>
-                      <CardHeader>
-                        <CardTitle className="text-base">Win Probability</CardTitle>
-                      </CardHeader>
-                      <CardContent className="space-y-4">
-                        <div className="text-center p-4 rounded-xl bg-emerald-50 dark:bg-emerald-950/50 border border-emerald-100 dark:border-emerald-900">
-                          <span className="text-3xl sm:text-4xl font-extrabold text-emerald-600 dark:text-emerald-400">{deal.probability}%</span>
-                          <span className="text-xs text-slate-500 block mt-1 font-semibold uppercase tracking-wider">Weighted Forecast</span>
-                        </div>
-                        <p className="text-xs text-slate-500">
-                          Expected Pipeline Yield:{' '}
-                          <span className="font-bold text-slate-900 dark:text-white">
-                            {formatCurrency((deal.value * deal.probability) / 100)}
-                          </span>
-                        </p>
-                      </CardContent>
-                    </Card>
-                  </div>
-                );
-              })()}
-            </div>
-          )}
+          {currentRoute === '/deals/detail' && (() => {
+            const deal = scopedDeals.find((item) => item.id === routeParam);
+            if (!deal) return <div className="rounded-lg border border-slate-200 bg-white p-10 text-center text-sm text-slate-500 dark:border-slate-800 dark:bg-slate-900">Deal not found</div>;
+            return <DealDetails
+              key={deal.id}
+              deal={deal}
+              customer={scopedCustomers.find((customer) => customer.id === deal.customerId)}
+              customers={scopedCustomers}
+              tasks={scopedTasks}
+              users={scopedUsers}
+              currentUser={currentUser}
+              onBack={() => navigate('/pipeline')}
+              onOpenCustomer={(id) => navigate('/customers/detail', id)}
+              onSaveDeal={handleSaveDeal}
+              onUpdateStage={handleUpdateDealStage}
+              onUpdateDeal={(id, updates) => setDeals((prev) => prev.map((item) => item.id === id ? { ...item, ...updates, id: item.id, createdAt: item.createdAt, updatedAt: new Date() } : item))}
+              onCreateTask={handleCreateDealTask}
+              onCreateOrderFromDeal={handleCreateOrderFromDeal}
+            />;
+          })()}
 
           {/* VIEW: Customers */}
           {currentRoute === '/customers' && (

@@ -13,12 +13,18 @@ interface StageColumnProps {
   deals: Deal[];
   users: User[];
   customers: Customer[];
+  totalValue?: number;
+  weightedValue?: number;
+  selectedIds?: string[];
+  onToggleSelect?: (dealId: string) => void;
   onAddDeal?: (stage: DealStage) => void;
   onViewDeal?: (dealId: string) => void;
+  onEditDeal?: (deal: Deal) => void;
   onMoveStage?: (dealId: string, next: DealStage) => void;
 }
 
 const STAGE_COLORS: Record<DealStage, string> = {
+  NEW: 'bg-slate-400',
   QUALIFIED: 'bg-blue-500',
   PROPOSAL: 'bg-amber-500',
   NEGOTIATION: 'bg-purple-500',
@@ -27,6 +33,7 @@ const STAGE_COLORS: Record<DealStage, string> = {
 };
 
 const NEXT_STAGE: Partial<Record<DealStage, DealStage>> = {
+  NEW: 'QUALIFIED',
   QUALIFIED: 'PROPOSAL',
   PROPOSAL: 'NEGOTIATION',
   NEGOTIATION: 'WON',
@@ -38,15 +45,21 @@ export function StageColumn({
   deals,
   users,
   customers,
+  totalValue: reportedTotalValue,
+  weightedValue: reportedWeightedValue,
+  selectedIds = [],
+  onToggleSelect,
   onAddDeal,
   onViewDeal,
+  onEditDeal,
   onMoveStage,
 }: StageColumnProps) {
   const { setNodeRef, isOver } = useDroppable({
     id: stage,
   });
 
-  const totalValue = deals.reduce((sum, d) => sum + d.value, 0);
+  const totalValue = reportedTotalValue ?? deals.reduce((sum, d) => sum + d.value, 0);
+  const weightedValue = reportedWeightedValue ?? deals.reduce((sum, deal) => sum + deal.value * deal.probability / 100, 0);
   const colorDot = STAGE_COLORS[stage] || 'bg-slate-400';
 
   return (
@@ -68,9 +81,10 @@ export function StageColumn({
           </span>
         </div>
         <div className="flex items-center space-x-1.5">
-          <span className="text-xs font-bold text-slate-500 dark:text-slate-400">
-            {formatCurrency(totalValue)}
-          </span>
+          <div className="text-right">
+            <span className="block text-xs font-bold text-slate-500 dark:text-slate-400">{formatCurrency(totalValue)}</span>
+            <span className="block text-[10px] text-slate-400">{formatCurrency(weightedValue)} weighted</span>
+          </div>
           {onAddDeal && (
             <button
               type="button"
@@ -85,7 +99,7 @@ export function StageColumn({
       </div>
 
       {/* Cards list */}
-      <div className="flex-1 space-y-2.5 overflow-y-auto min-h-[220px] sm:min-h-[350px] max-h-[calc(100vh-280px)] pr-0.5">
+      <div className="flex-1 space-y-2.5 overflow-y-auto min-h-55 sm:min-h-87.5 max-h-[calc(100vh-280px)] pr-0.5">
         {deals.map((deal) => {
           const cust = customers.find((c) => c.id === deal.customerId);
           const rep = users.find((u) => u.id === deal.assignedToId);
@@ -95,12 +109,14 @@ export function StageColumn({
               deal={deal}
               customer={cust}
               assignedUser={rep}
+              isSelected={selectedIds.includes(deal.id)}
+              onToggleSelect={onToggleSelect}
               onView={onViewDeal}
-              onAdvance={
-                onMoveStage && NEXT_STAGE[deal.stage]
-                  ? (id) => onMoveStage(id, NEXT_STAGE[deal.stage]!)
-                  : undefined
-              }
+              onEdit={() => onEditDeal?.(deal)}
+              onAdvance={onMoveStage ? (id, target) => {
+                const nextStage = target === 'WON' || target === 'LOST' ? target : NEXT_STAGE[deal.stage];
+                if (nextStage) onMoveStage(id, nextStage);
+              } : undefined}
             />
           );
         })}
