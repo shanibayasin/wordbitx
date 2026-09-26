@@ -11,6 +11,7 @@ import { LeadForm } from '../components/leads/LeadForm.tsx';
 import { PipelineBoard } from '../components/pipeline/PipelineBoard.tsx';
 import { CustomerTable } from '../components/customers/CustomerTable.tsx';
 import { CustomerForm } from '../components/customers/CustomerForm.tsx';
+import { CustomerDetails } from '../components/customers/CustomerDetails.tsx';
 import { TicketTable } from '../components/tickets/TicketTable.tsx';
 import { TicketForm } from '../components/tickets/TicketForm.tsx';
 import { Button } from '../components/ui/Button.tsx';
@@ -125,7 +126,15 @@ export default function App() {
   const [users, setUsers] = useState<User[]>(SEED_USERS);
   const [leads, setLeads] = useState<Lead[]>(SEED_LEADS);
   const [deals, setDeals] = useState<Deal[]>(SEED_DEALS);
-  const [customers, setCustomers] = useState<Customer[]>(SEED_CUSTOMERS);
+  const [customers, setCustomers] = useState<Customer[]>(() => {
+    try {
+      const storedCustomers = window.localStorage.getItem('wordbitx:customers');
+      const parsedCustomers = storedCustomers ? JSON.parse(storedCustomers) : null;
+      return Array.isArray(parsedCustomers) ? parsedCustomers as Customer[] : SEED_CUSTOMERS;
+    } catch {
+      return SEED_CUSTOMERS;
+    }
+  });
   const [tickets, setTickets] = useState<Ticket[]>(SEED_TICKETS);
   const [tasks, setTasks] = useState<Task[]>(SEED_TASKS);
 
@@ -138,6 +147,7 @@ export default function App() {
 
   const [isTicketModalOpen, setIsTicketModalOpen] = useState(false);
   const [selectedTicket, setSelectedTicket] = useState<Ticket | null>(null);
+  const [ticketCustomerId, setTicketCustomerId] = useState('');
 
   const [isInviteTeamOpen, setIsInviteTeamOpen] = useState(false);
   const [inviteName, setInviteName] = useState('');
@@ -160,6 +170,10 @@ export default function App() {
   const scopedTickets = tickets.filter((t) => t.organizationId === currentOrgId);
   const scopedTasks = tasks.filter((t) => t.organizationId === currentOrgId);
   const scopedUsers = users.filter((u) => u.organizationId === currentOrgId);
+
+  useEffect(() => {
+    window.localStorage.setItem('wordbitx:customers', JSON.stringify(customers));
+  }, [customers]);
 
   // Navigate helper
   const navigate = (path: string, param?: string) => {
@@ -232,7 +246,7 @@ export default function App() {
   const handleSaveCustomer = async (data: any) => {
     if (selectedCustomer) {
       setCustomers((prev) =>
-        prev.map((c) => (c.id === selectedCustomer.id ? { ...c, ...data } : c))
+        prev.map((c) => (c.id === selectedCustomer.id ? { ...c, ...data, id: c.id, createdAt: c.createdAt, updatedAt: new Date(), lastActivityAt: new Date() } : c))
       );
       toast.success('Customer account updated');
     } else {
@@ -241,6 +255,8 @@ export default function App() {
         ...data,
         organizationId: currentOrgId,
         createdAt: new Date(),
+        updatedAt: new Date(),
+        lastActivityAt: new Date(),
       };
       setCustomers((prev) => [newCust, ...prev]);
       toast.success('New customer account created');
@@ -251,6 +267,60 @@ export default function App() {
   const handleDeleteCustomer = (id: string) => {
     setCustomers((prev) => prev.filter((c) => c.id !== id));
     toast.success('Customer account deleted');
+  };
+
+  const handleBulkUpdateCustomers = (ids: string[], updates: Partial<Customer>) => {
+    setCustomers((prev) => prev.map((customer) => ids.includes(customer.id)
+      ? { ...customer, ...updates, updatedAt: new Date() }
+      : customer));
+    toast.success(`Updated ${ids.length} customer${ids.length === 1 ? '' : 's'}`);
+  };
+
+  const createDealForCustomer = (customer: Customer) => {
+    const title = window.prompt('Deal name');
+    if (!title?.trim()) return;
+    const amount = Number(window.prompt('Deal value', '0'));
+    if (!Number.isFinite(amount) || amount < 0) {
+      toast.error('Enter a valid deal value');
+      return;
+    }
+    handleCreateDeal({ title: title.trim(), value: amount, stage: 'QUALIFIED', probability: 25, customerId: customer.id, assignedToId: customer.assignedToId || currentUser.id });
+  };
+
+  const createTaskForCustomer = (customer: Customer, title: string) => {
+    const task: Task = {
+      id: `task_${Date.now()}`, title, dueDate: null, completed: false, organizationId: currentOrgId,
+      assignedToId: currentUser.id, customerId: customer.id, createdAt: new Date(),
+    };
+    setTasks((prev) => [task, ...prev]);
+    setCustomers((prev) => prev.map((item) => item.id === customer.id ? { ...item, updatedAt: new Date(), lastActivityAt: new Date() } : item));
+    toast.success('Customer follow-up task created');
+  };
+
+  const handleCustomerQuickAction = (customer: Customer, action: 'note' | 'deal' | 'order' | 'task') => {
+    if (action === 'deal') return createDealForCustomer(customer);
+    if (action === 'task') {
+      const title = window.prompt(`Task for ${customer.name}`);
+      if (title?.trim()) createTaskForCustomer(customer, title.trim());
+      return;
+    }
+    if (action === 'order') {
+      toast.info('Order records are not available in this workspace yet');
+      return;
+    }
+    const note = window.prompt(`Add a note for ${customer.name}`);
+    if (note?.trim()) {
+      setCustomers((prev) => prev.map((item) => item.id === customer.id
+        ? { ...item, notes: [item.notes, note.trim()].filter(Boolean).join('\n\n'), updatedAt: new Date(), lastActivityAt: new Date() }
+        : item));
+      toast.success('Customer note added');
+    }
+  };
+
+  const createTicketForCustomer = (customer: Customer) => {
+    setSelectedTicket(null);
+    setTicketCustomerId(customer.id);
+    setIsTicketModalOpen(true);
   };
 
   // Tickets
@@ -949,9 +1019,9 @@ export default function App() {
             <div className="space-y-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">Customer Accounts</h1>
+                  <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">Customers</h1>
                   <p className="text-sm text-slate-500 dark:text-slate-400">
-                    Enterprise accounts, contract histories, and support ticket tracking.
+                    Customer management, account health, and connected business relationships.
                   </p>
                 </div>
               </div>
@@ -960,6 +1030,7 @@ export default function App() {
                 customers={scopedCustomers}
                 deals={scopedDeals}
                 tickets={scopedTickets}
+                users={scopedUsers}
                 onAddCustomer={() => {
                   setSelectedCustomer(null);
                   setIsCustomerModalOpen(true);
@@ -970,132 +1041,34 @@ export default function App() {
                 }}
                 onDeleteCustomer={handleDeleteCustomer}
                 onViewCustomer={(id) => navigate('/customers/detail', id)}
+                onQuickAction={handleCustomerQuickAction}
+                onBulkUpdate={handleBulkUpdateCustomers}
               />
             </div>
           )}
 
           {/* VIEW: Customer Detail */}
-          {currentRoute === '/customers/detail' && (
-            <div className="space-y-6 max-w-5xl mx-auto">
-              <div className="flex items-center justify-between">
-                <Button variant="ghost" onClick={() => navigate('/customers')} className="space-x-1.5">
-                  <ArrowLeft className="h-4 w-4" />
-                  <span>Back to Customers</span>
-                </Button>
-              </div>
-
-              {(() => {
-                const customer = scopedCustomers.find((c) => c.id === routeParam) || scopedCustomers[0];
-                if (!customer) return <div>Customer not found</div>;
-                const custDeals = scopedDeals.filter((d) => d.customerId === customer.id);
-                const custTickets = scopedTickets.filter((t) => t.customerId === customer.id);
-                const totalVal = custDeals.reduce((sum, d) => sum + d.value, 0);
-
-                return (
-                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
-                    <Card className="lg:col-span-2">
-                      <CardHeader className="flex flex-row items-center justify-between pb-2">
-                        <div>
-                          <CardTitle className="text-lg sm:text-xl">{customer.company || customer.name}</CardTitle>
-                          <p className="text-xs text-slate-400 mt-1">Contact: {customer.name}</p>
-                        </div>
-                        <Badge variant="outline">Enterprise Account</Badge>
-                      </CardHeader>
-                      <CardContent className="space-y-4 sm:space-y-6 pt-4">
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 text-sm">
-                          <div className="flex items-center space-x-2 text-slate-600 dark:text-slate-300">
-                            <Mail className="h-4 w-4 text-slate-400 shrink-0" />
-                            <span className="truncate">{customer.email || 'N/A'}</span>
-                          </div>
-                          <div className="flex items-center space-x-2 text-slate-600 dark:text-slate-300">
-                            <Phone className="h-4 w-4 text-slate-400 shrink-0" />
-                            <span className="truncate">{customer.phone || 'N/A'}</span>
-                          </div>
-                          <div className="flex items-center space-x-2 text-slate-600 dark:text-slate-300">
-                            <Calendar className="h-4 w-4 text-slate-400 shrink-0" />
-                            <span className="truncate">Client Since {formatDate(customer.createdAt)}</span>
-                          </div>
-                          <div className="flex items-center space-x-2 text-slate-600 dark:text-slate-300">
-                            <Building className="h-4 w-4 text-slate-400 shrink-0" />
-                            <span className="truncate">Tier: Strategic Enterprise</span>
-                          </div>
-                        </div>
-
-                        {/* Linked Deals */}
-                        <div className="pt-4 border-t border-slate-100 dark:border-slate-800">
-                          <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-3 flex items-center space-x-1.5">
-                            <DollarSign className="h-3.5 w-3.5 text-indigo-500" />
-                            <span>Linked Deals ({custDeals.length})</span>
-                          </h4>
-                          <div className="space-y-2">
-                            {custDeals.map((deal) => (
-                              <div
-                                key={deal.id}
-                                onClick={() => navigate('/deals/detail', deal.id)}
-                                className="flex items-center justify-between p-3 rounded-lg bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-800 cursor-pointer hover:border-indigo-300 transition"
-                              >
-                                <div>
-                                  <h5 className="text-sm font-semibold text-slate-900 dark:text-white">{deal.title}</h5>
-                                  <span className="text-xs text-slate-400">Win Probability: {deal.probability}%</span>
-                                </div>
-                                <div className="text-right">
-                                  <span className="text-sm font-bold text-slate-900 dark:text-white block">
-                                    {formatCurrency(deal.value)}
-                                  </span>
-                                  <span className="text-[10px] font-bold text-indigo-600 dark:text-indigo-400">
-                                    {deal.stage}
-                                  </span>
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-
-                        {/* Linked Tickets */}
-                        <div className="pt-4 border-t border-slate-100 dark:border-slate-800">
-                          <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-3 flex items-center space-x-1.5">
-                            <LifeBuoy className="h-3.5 w-3.5 text-amber-500" />
-                            <span>Support Tickets ({custTickets.length})</span>
-                          </h4>
-                          <div className="space-y-2">
-                            {custTickets.map((t) => (
-                              <div
-                                key={t.id}
-                                onClick={() => navigate('/tickets/detail', t.id)}
-                                className="flex items-center justify-between p-3 rounded-lg bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-800 cursor-pointer hover:border-indigo-300 transition"
-                              >
-                                <div>
-                                  <h5 className="text-sm font-semibold text-slate-900 dark:text-white">{t.subject}</h5>
-                                  <span className="text-xs text-slate-400">Priority: {t.priority}</span>
-                                </div>
-                                <Badge variant={t.status === 'OPEN' ? 'cyan' : 'success'}>{t.status}</Badge>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      </CardContent>
-                    </Card>
-
-                    <Card>
-                      <CardHeader>
-                        <CardTitle className="text-base">Account Value</CardTitle>
-                      </CardHeader>
-                      <CardContent className="space-y-4">
-                        <div className="text-center p-4 rounded-xl bg-indigo-50 dark:bg-indigo-950/50 border border-indigo-100 dark:border-indigo-900">
-                          <span className="text-2xl sm:text-3xl font-extrabold text-indigo-600 dark:text-indigo-400">
-                            {formatCurrency(totalVal)}
-                          </span>
-                          <span className="text-xs text-slate-500 block mt-1 font-semibold uppercase tracking-wider">
-                            Total Contract Pipeline
-                          </span>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  </div>
-                );
-              })()}
-            </div>
-          )}
+          {currentRoute === '/customers/detail' && (() => {
+            const customer = scopedCustomers.find((item) => item.id === routeParam);
+            if (!customer) return <div className="rounded-lg border border-slate-200 bg-white p-10 text-center text-sm text-slate-500 dark:border-slate-800 dark:bg-slate-900">Customer not found</div>;
+            return <CustomerDetails
+              key={customer.id}
+              customer={customer}
+              deals={scopedDeals}
+              tickets={scopedTickets}
+              tasks={scopedTasks}
+              users={scopedUsers}
+              onBack={() => navigate('/customers')}
+              onEdit={(record) => { setSelectedCustomer(record); setIsCustomerModalOpen(true); }}
+              onOpenDeal={(id) => navigate('/deals/detail', id)}
+              onOpenTicket={(id) => navigate('/tickets/detail', id)}
+              onCreateDeal={createDealForCustomer}
+              onCreateTask={createTaskForCustomer}
+              onCreateTicket={createTicketForCustomer}
+              onSaveNotes={(customerNotes) => setCustomers((prev) => prev.map((item) => item.id === customer.id ? { ...item, customerNotes, notes: customerNotes.map((note) => note.content).join('\n\n'), updatedAt: new Date(), lastActivityAt: new Date() } : item))}
+              onSaveCalls={(calls) => setCustomers((prev) => prev.map((item) => item.id === customer.id ? { ...item, calls, updatedAt: new Date(), lastActivityAt: new Date() } : item))}
+            />;
+          })()}
 
           {/* VIEW: Tickets */}
           {currentRoute === '/tickets' && (
@@ -1549,6 +1522,7 @@ export default function App() {
         onOpenChange={setIsCustomerModalOpen}
         onSubmit={handleSaveCustomer}
         customer={selectedCustomer}
+        users={scopedUsers}
       />
 
       <TicketForm
@@ -1556,7 +1530,9 @@ export default function App() {
         onOpenChange={setIsTicketModalOpen}
         onSubmit={handleSaveTicket}
         ticket={selectedTicket}
-        customers={scopedCustomers}
+        customers={ticketCustomerId && isTicketModalOpen
+          ? [scopedCustomers.find((customer) => customer.id === ticketCustomerId), ...scopedCustomers.filter((customer) => customer.id !== ticketCustomerId)].filter((customer): customer is Customer => Boolean(customer))
+          : scopedCustomers}
         users={scopedUsers}
       />
 

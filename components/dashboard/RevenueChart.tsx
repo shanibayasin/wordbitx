@@ -17,19 +17,45 @@ interface RevenueChartProps {
     revenue: number;
     dealsWon: number;
   }>;
+  rangeLabel?: string;
+  currentMonth?: string;
+  growth?: number;
 }
 
-export function RevenueChart({ data }: RevenueChartProps) {
+export function RevenueChart({ data, rangeLabel = '30D', currentMonth = 'Current month', growth = 0 }: RevenueChartProps) {
+  const latest = data[data.length - 1]?.revenue ?? 0;
+  const previous = data[data.length - 2]?.revenue ?? latest;
+  const monthLabel = currentMonth || 'Current month';
+  const growthValue = Number.isFinite(growth) ? growth : ((latest - previous) / Math.max(previous, 1)) * 100;
+
   return (
     <Card className="col-span-1 lg:col-span-2 shadow-sm min-w-0 overflow-hidden">
-      <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between pb-2 gap-2">
-        <div>
-          <CardTitle className="text-base font-semibold">Revenue Trajectory</CardTitle>
-          <CardDescription>Closed-won revenue progression over the trailing months</CardDescription>
+      <CardHeader className="flex flex-col gap-3 pb-2">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <CardTitle className="text-base font-semibold">Revenue Trajectory</CardTitle>
+            <CardDescription>Closed-won revenue progression over the trailing months</CardDescription>
+          </div>
+          <div className="flex items-center gap-2 text-xs shrink-0">
+            <span className="inline-block h-2.5 w-2.5 rounded-full bg-indigo-600" />
+            <span className="text-slate-600 dark:text-slate-300 font-medium">Monthly Revenue ($)</span>
+          </div>
         </div>
-        <div className="flex items-center space-x-2 text-xs shrink-0">
-          <span className="inline-block h-2.5 w-2.5 rounded-full bg-indigo-600" />
-          <span className="text-slate-600 dark:text-slate-300 font-medium">Monthly Revenue ($)</span>
+
+        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-3">
+          <div>
+            <div className="text-[11px] uppercase tracking-[0.08em] text-slate-500">{monthLabel}</div>
+            <div className="mt-1 text-2xl font-bold tracking-tight text-slate-900 dark:text-white">
+              {formatCurrency(latest)}
+            </div>
+          </div>
+          <div className="flex items-center gap-2 rounded-full bg-emerald-50 px-2.5 py-1.5 text-xs font-semibold text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300">
+            <span className="inline-flex items-center gap-1">
+              <span className="inline-block h-2 w-2 rounded-full bg-emerald-500" />
+              {growthValue >= 0 ? '+' : ''}{growthValue.toFixed(1)}%
+            </span>
+            <span className="text-emerald-600/80">({rangeLabel})</span>
+          </div>
         </div>
       </CardHeader>
       <CardContent className="pt-2 sm:pt-4 px-2 sm:px-6">

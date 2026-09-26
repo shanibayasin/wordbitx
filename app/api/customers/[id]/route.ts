@@ -48,6 +48,7 @@ export async function PUT(request: Request, { params }: { params: { id: string }
       await connectToDatabase();
       const updated = await Customer.findByIdAndUpdate(params.id, validation.data, {
         new: true,
+        runValidators: true,
       }).lean();
 
       if (!updated) {

@@ -1,12 +1,17 @@
 export type Role = 'ADMIN' | 'SALES' | 'SUPPORT' | 'AGENT';
 
-export type LeadStatus = 'NEW' | 'FOLLOW_UP' | 'QUALIFIED' | 'LOST';
+export type LeadStatus = 'NEW' | 'CONTACTED' | 'QUALIFIED' | 'PROPOSAL' | 'NEGOTIATION' | 'CONVERTED' | 'LOST' | 'FOLLOW_UP';
+
+export type LeadPriority = 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT';
 
 export type DealStage = 'QUALIFIED' | 'PROPOSAL' | 'NEGOTIATION' | 'WON' | 'LOST';
 
 export type TicketStatus = 'OPEN' | 'IN_PROGRESS' | 'WAITING' | 'RESOLVED';
 
 export type Priority = 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT';
+
+export type CustomerStatus = 'ACTIVE' | 'INACTIVE' | 'PROSPECT' | 'VIP' | 'AT_RISK' | 'ARCHIVED';
+export type CustomerType = 'INDIVIDUAL' | 'SMB' | 'MID_MARKET' | 'ENTERPRISE' | 'STRATEGIC';
 
 export interface Organization {
   id: string;
@@ -42,16 +47,29 @@ export interface User {
 export interface Lead {
   id: string;
   _id?: string;
+  firstName?: string;
+  lastName?: string;
   name: string;
+  company?: string | null;
   email: string | null;
   phone: string | null;
+  alternatePhone?: string | null;
   source: string | null;
+  industry?: string | null;
+  jobTitle?: string | null;
+  companySize?: string | null;
   score: number;
   status: LeadStatus;
+  priority?: LeadPriority;
   organizationId: string;
   organization?: Organization;
   assignedToId: string | null;
   assignedTo?: User | null;
+  assignedTeam?: string | null;
+  assignedDealer?: string | null;
+  nextFollowUp?: Date | string | null;
+  followUpType?: string | null;
+  notes?: string | null;
   createdAt: Date | string;
   updatedAt: Date | string;
 }
@@ -81,11 +99,60 @@ export interface Customer {
   phone: string | null;
   company: string | null;
   avatarUrl?: string | null;
+  firstName?: string;
+  lastName?: string;
+  alternatePhone?: string | null;
+  jobTitle?: string | null;
+  industry?: string | null;
+  companySize?: string | null;
+  website?: string | null;
+  address?: string | null;
+  city?: string | null;
+  state?: string | null;
+  country?: string | null;
+  postalCode?: string | null;
+  customerType?: CustomerType;
+  status?: CustomerStatus;
+  source?: string | null;
+  assignedToId?: string | null;
+  assignedTeam?: string | null;
+  assignedDealer?: string | null;
+  tags?: string[];
+  notes?: string | null;
+  customerNotes?: CustomerNote[];
+  calls?: CustomerCall[];
+  updatedAt?: Date | string;
+  lastActivityAt?: Date | string | null;
+  totalOrders?: number;
+  totalRevenue?: number;
+  outstandingBalance?: number;
+  paidAmount?: number;
+  pendingAmount?: number;
+  overdueAmount?: number;
+  orderStatus?: string;
+  paymentStatus?: string;
   organizationId: string;
   organization?: Organization;
   deals?: Deal[];
   tickets?: Ticket[];
   createdAt: Date | string;
+}
+
+export interface CustomerNote {
+  id: string;
+  content: string;
+  author: string;
+  createdAt: Date | string;
+}
+
+export interface CustomerCall {
+  id: string;
+  date: Date | string;
+  agent: string;
+  type: 'Incoming' | 'Outgoing' | 'Missed' | 'Callback';
+  duration: string;
+  outcome: string;
+  notes: string;
 }
 
 export interface Ticket {
@@ -115,6 +182,7 @@ export interface Task {
   organizationId: string;
   organization?: Organization;
   assignedToId: string | null;
+  customerId?: string | null;
   assignedTo?: User | null;
   createdAt: Date | string;
 }

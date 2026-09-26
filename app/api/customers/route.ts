@@ -22,14 +22,9 @@ export async function GET(request: Request) {
       const tickets = await Ticket.find({ customerId: { $in: customerIds } }).lean();
 
       const formatted = customers.map((c: any) => ({
+        ...c,
         id: c._id.toString(),
-        name: c.name,
-        email: c.email,
-        phone: c.phone,
-        company: c.company,
-        avatarUrl: c.avatarUrl || null,
         organizationId: c.organizationId.toString(),
-        createdAt: c.createdAt,
         deals: deals.filter((d: any) => d.customerId?.toString() === c._id.toString()),
         tickets: tickets.filter((t: any) => t.customerId?.toString() === c._id.toString()),
       }));
@@ -67,6 +62,7 @@ export async function POST(request: Request) {
           ...validation.data,
           organizationId: orgId,
           createdAt: newCustomer.createdAt,
+          updatedAt: newCustomer.updatedAt,
           deals: [],
           tickets: [],
         },

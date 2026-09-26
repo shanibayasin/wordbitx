@@ -9,7 +9,7 @@ interface StatsCardProps {
   icon: React.ComponentType<{ className?: string }>;
   change?: number;
   changeLabel?: string;
-  colorVariant?: 'indigo' | 'emerald' | 'amber' | 'purple';
+  colorVariant?: 'indigo' | 'emerald' | 'amber' | 'purple' | 'rose' | 'sky' | 'violet';
 }
 
 export function StatsCard({
@@ -25,6 +25,9 @@ export function StatsCard({
     emerald: 'bg-emerald-50 text-emerald-600 dark:bg-emerald-950/70 dark:text-emerald-400',
     amber: 'bg-amber-50 text-amber-600 dark:bg-amber-950/70 dark:text-amber-400',
     purple: 'bg-purple-50 text-purple-600 dark:bg-purple-950/70 dark:text-purple-400',
+    rose: 'bg-rose-50 text-rose-600 dark:bg-rose-950/70 dark:text-rose-400',
+    sky: 'bg-sky-50 text-sky-600 dark:bg-sky-950/70 dark:text-sky-400',
+    violet: 'bg-violet-50 text-violet-600 dark:bg-violet-950/70 dark:text-violet-400',
   };
 
   const isPositive = change !== undefined && change >= 0;
