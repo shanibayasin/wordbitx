@@ -4,6 +4,7 @@ import {
   Users,
   Kanban,
   Building2,
+  ShoppingCart,
   Ticket,
   Menu,
 } from 'lucide-react';
@@ -19,6 +20,7 @@ export function MobileNav({ currentPath, onNavigate, onOpenMenu }: MobileNavProp
     { label: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
     { label: 'Leads', path: '/leads', icon: Users },
     { label: 'Pipeline', path: '/pipeline', icon: Kanban },
+    { label: 'Orders', path: '/orders', icon: ShoppingCart },
     { label: 'Customers', path: '/customers', icon: Building2 },
     { label: 'Tickets', path: '/tickets', icon: Ticket },
   ];

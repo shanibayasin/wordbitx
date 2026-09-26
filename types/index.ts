@@ -158,6 +158,96 @@ export interface DealOrderHandoff {
   createdAt: Date | string;
 }
 
+export type OrderStatus = 'DRAFT' | 'PENDING' | 'CONFIRMED' | 'PROCESSING' | 'READY' | 'COMPLETED' | 'CANCELLED' | 'REFUNDED';
+export type PaymentStatus = 'UNPAID' | 'PARTIAL' | 'PAID' | 'OVERDUE' | 'REFUNDED';
+export type DeliveryStatus = 'NOT_STARTED' | 'PROCESSING' | 'READY' | 'SHIPPED' | 'DELIVERED' | 'FAILED';
+
+export interface OrderItem {
+  id: string;
+  productId?: string | null;
+  name: string;
+  description: string;
+  quantity: number;
+  unitPrice: number;
+  discount: number;
+  tax: number;
+}
+
+export interface OrderNote {
+  id: string;
+  content: string;
+  author: string;
+  createdAt: Date | string;
+}
+
+export interface OrderActivity {
+  id: string;
+  type: 'CREATED' | 'UPDATED' | 'CONFIRMED' | 'PROCESSING' | 'READY' | 'PAYMENT_RECEIVED' | 'INVOICE_CREATED' | 'COMPLETED' | 'CANCELLED' | 'REFUNDED' | 'DELIVERY_UPDATED' | 'NOTE_ADDED';
+  description: string;
+  user: string;
+  createdAt: Date | string;
+}
+
+export interface OrderInvoiceReference {
+  id: string;
+  amount: number;
+  status: 'DRAFT';
+  createdAt: Date | string;
+}
+
+export interface OrderPaymentReference {
+  id: string;
+  amount: number;
+  method: string;
+  transactionId: string;
+  status: 'RECORDED' | 'PENDING' | 'REFUNDED';
+  paidAt: Date | string;
+}
+
+export interface Order {
+  id: string;
+  organizationId: string;
+  customerId: string;
+  company?: string | null;
+  dealId?: string | null;
+  sourceDealHandoffId?: string | null;
+  salespersonId?: string | null;
+  orderDate: Date | string;
+  expectedDelivery?: Date | string | null;
+  paymentDueDate?: Date | string | null;
+  priority: Priority;
+  status: OrderStatus;
+  paymentStatus: PaymentStatus;
+  items: OrderItem[];
+  subtotal: number;
+  discount: number;
+  tax: number;
+  additionalCharges: number;
+  total: number;
+  paidAmount: number;
+  remainingAmount: number;
+  deliveryStatus: DeliveryStatus;
+  deliveryDate?: Date | string | null;
+  shippingMethod?: string | null;
+  trackingNumber?: string | null;
+  deliveryAddress?: string | null;
+  deliveryNotes?: string | null;
+  notes: OrderNote[];
+  activities: OrderActivity[];
+  invoiceReferences: OrderInvoiceReference[];
+  paymentReferences: OrderPaymentReference[];
+  cancellationReason?: string | null;
+  cancellationNotes?: string | null;
+  refundAmount?: number;
+  refundDate?: Date | string | null;
+  refundReason?: string | null;
+  refundStatus?: 'NONE' | 'PENDING' | 'COMPLETED';
+  lastPaymentDate?: Date | string | null;
+  createdAt: Date | string;
+  updatedAt: Date | string;
+  lastActivityAt: Date | string;
+}
+
 export interface Customer {
   id: string;
   _id?: string;

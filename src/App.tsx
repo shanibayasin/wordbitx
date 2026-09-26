@@ -10,6 +10,7 @@ import { LeadTable } from '../components/leads/LeadTable.tsx';
 import { LeadForm } from '../components/leads/LeadForm.tsx';
 import { SalesPipeline } from '../components/pipeline/SalesPipeline.tsx';
 import { DealDetails } from '../components/pipeline/DealDetails.tsx';
+import { OrderWorkspace } from '../components/orders/OrderWorkspace.tsx';
 import { CustomerTable } from '../components/customers/CustomerTable.tsx';
 import { CustomerForm } from '../components/customers/CustomerForm.tsx';
 import { CustomerDetails } from '../components/customers/CustomerDetails.tsx';
@@ -59,6 +60,7 @@ import {
   Ticket,
   Task,
   DealStage,
+  Order,
   Role,
 } from '../types/index.ts';
 
@@ -146,6 +148,15 @@ export default function App() {
   });
   const [tickets, setTickets] = useState<Ticket[]>(SEED_TICKETS);
   const [tasks, setTasks] = useState<Task[]>(SEED_TASKS);
+  const [orders, setOrders] = useState<Order[]>(() => {
+    try {
+      const storedOrders = window.localStorage.getItem('wordbitx:orders');
+      const parsedOrders = storedOrders ? JSON.parse(storedOrders) : null;
+      return Array.isArray(parsedOrders) ? parsedOrders as Order[] : [];
+    } catch {
+      return [];
+    }
+  });
 
   // Modals State
   const [isLeadModalOpen, setIsLeadModalOpen] = useState(false);
@@ -178,6 +189,7 @@ export default function App() {
   const scopedCustomers = customers.filter((c) => c.organizationId === currentOrgId);
   const scopedTickets = tickets.filter((t) => t.organizationId === currentOrgId);
   const scopedTasks = tasks.filter((t) => t.organizationId === currentOrgId);
+  const scopedOrders = orders.filter((order) => order.organizationId === currentOrgId);
   const scopedUsers = users.filter((u) => u.organizationId === currentOrgId);
 
   useEffect(() => {
@@ -187,6 +199,10 @@ export default function App() {
   useEffect(() => {
     window.localStorage.setItem('wordbitx:deals', JSON.stringify(deals));
   }, [deals]);
+
+  useEffect(() => {
+    window.localStorage.setItem('wordbitx:orders', JSON.stringify(orders));
+  }, [orders]);
 
   // Navigate helper
   const navigate = (path: string, param?: string) => {
@@ -1158,6 +1174,23 @@ export default function App() {
               onSaveCalls={(calls) => setCustomers((prev) => prev.map((item) => item.id === customer.id ? { ...item, calls, updatedAt: new Date(), lastActivityAt: new Date() } : item))}
             />;
           })()}
+
+          {(currentRoute === '/orders' || currentRoute === '/orders/detail') && (
+            <OrderWorkspace
+              orders={scopedOrders}
+              customers={scopedCustomers}
+              deals={scopedDeals}
+              users={scopedUsers}
+              currentUser={currentUser}
+              selectedOrderId={currentRoute === '/orders/detail' ? routeParam : null}
+              onOrdersChange={(nextOrders) => setOrders((previous) => [
+                ...previous.filter((order) => order.organizationId !== currentOrgId),
+                ...nextOrders,
+              ])}
+              onNavigate={navigate}
+              onAddCustomer={() => { setSelectedCustomer(null); setIsCustomerModalOpen(true); }}
+            />
+          )}
 
           {/* VIEW: Tickets */}
           {currentRoute === '/tickets' && (
