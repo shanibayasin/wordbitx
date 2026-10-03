@@ -2,7 +2,8 @@ import { NextResponse } from 'next/server';
 import connectToDatabase from '../../../../lib/mongodb.ts';
 import Task from '../../../../models/Task.ts';
 
-export async function PUT(request: Request, { params }: { params: { id: string } }) {
+export async function PUT(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
   try {
     const body = await request.json();
 
@@ -14,7 +15,7 @@ export async function PUT(request: Request, { params }: { params: { id: string }
 
     try {
       await connectToDatabase();
-      const updated = await Task.findByIdAndUpdate(params.id, updateData, { new: true })
+      const updated = await Task.findByIdAndUpdate(id, updateData, { new: true })
         .populate('assignedToId', 'name email role avatarUrl')
         .lean();
 
@@ -28,7 +29,7 @@ export async function PUT(request: Request, { params }: { params: { id: string }
       });
     } catch {
       return NextResponse.json({
-        id: params.id,
+        id,
         ...updateData,
       });
     }
@@ -37,15 +38,16 @@ export async function PUT(request: Request, { params }: { params: { id: string }
   }
 }
 
-export async function DELETE(request: Request, { params }: { params: { id: string } }) {
+export async function DELETE(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
   try {
     try {
       await connectToDatabase();
-      await Task.findByIdAndDelete(params.id);
+      await Task.findByIdAndDelete(id);
     } catch {
       // Graceful
     }
-    return NextResponse.json({ success: true, id: params.id });
+    return NextResponse.json({ success: true, id });
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }

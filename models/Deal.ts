@@ -2,6 +2,63 @@ import mongoose, { Schema, Document, Model } from 'mongoose';
 
 export type DealStageType = 'NEW' | 'QUALIFIED' | 'PROPOSAL' | 'NEGOTIATION' | 'WON' | 'LOST';
 
+interface DealStageHistoryRecord {
+  id?: string;
+  fromStage?: DealStageType | null;
+  toStage: DealStageType;
+  changedBy?: string;
+  changedAt?: Date;
+  timeInPreviousStageMs?: number;
+  lossReason?: string;
+  lossNotes?: string;
+}
+
+interface DealActivityRecord {
+  id?: string;
+  type?: string;
+  description?: string;
+  user?: string;
+  relatedEntity?: string;
+  createdAt?: Date;
+}
+
+interface DealNoteRecord {
+  id?: string;
+  content?: string;
+  author?: string;
+  createdAt?: Date;
+}
+
+interface DealCallRecord {
+  id?: string;
+  date?: Date;
+  agent?: string;
+  type?: 'Incoming' | 'Outgoing' | 'Missed' | 'Callback';
+  duration?: string;
+  outcome?: string;
+  notes?: string;
+}
+
+interface DealTaskRecord {
+  id?: string;
+  title?: string;
+  assignedToId?: string;
+  priority?: 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT';
+  dueDate?: Date;
+  completed?: boolean;
+  notes?: string;
+  createdAt?: Date;
+}
+
+interface OrderHandoffRecord {
+  id?: string;
+  customerId?: string;
+  amount?: number;
+  currency?: string;
+  status?: 'DRAFT';
+  createdAt?: Date;
+}
+
 const StageHistorySchema = new Schema({
   id: String,
   fromStage: { type: String, enum: ['NEW', 'QUALIFIED', 'PROPOSAL', 'NEGOTIATION', 'WON', 'LOST'], default: null },
@@ -79,12 +136,12 @@ export interface IDeal extends Document {
   notes?: string | null;
   lossReason?: string | null;
   lossNotes?: string | null;
-  stageHistory?: mongoose.Types.DocumentArray<any>;
-  activities?: mongoose.Types.DocumentArray<any>;
-  dealNotes?: mongoose.Types.DocumentArray<any>;
-  calls?: mongoose.Types.DocumentArray<any>;
-  tasks?: mongoose.Types.DocumentArray<any>;
-  orderHandoff?: any;
+  stageHistory?: DealStageHistoryRecord[];
+  activities?: DealActivityRecord[];
+  dealNotes?: DealNoteRecord[];
+  calls?: DealCallRecord[];
+  tasks?: DealTaskRecord[];
+  orderHandoff?: OrderHandoffRecord | null;
   organizationId: mongoose.Types.ObjectId;
   assignedToId?: mongoose.Types.ObjectId | null;
   customerId?: mongoose.Types.ObjectId | null;

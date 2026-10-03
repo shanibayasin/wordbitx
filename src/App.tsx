@@ -1,4 +1,7 @@
+'use client';
+
 import React, { useState, useEffect } from 'react';
+import { usePathname, useRouter } from 'next/navigation';
 import { Sidebar } from '../components/layout/Sidebar.tsx';
 import { Topbar } from '../components/layout/Topbar.tsx';
 import { MobileNav } from '../components/layout/MobileNav.tsx';
@@ -116,9 +119,16 @@ const SEED_TASKS: Task[] = [
 ];
 
 export default function App() {
-  // Navigation State
-  const [currentRoute, setCurrentRoute] = useState('/dashboard');
-  const [routeParam, setRouteParam] = useState<string | null>(null);
+  const pathname = usePathname();
+  const router = useRouter();
+  const activeView = pathname.match(/^\/(leads|deals|customers|orders|tickets)\/[^/]+$/)
+    ? pathname.startsWith('/leads/') ? '/leads/detail'
+      : pathname.startsWith('/deals/') ? '/deals/detail'
+        : pathname.startsWith('/customers/') ? '/customers/detail'
+          : pathname.startsWith('/orders/') ? '/orders/detail'
+            : '/tickets/detail'
+    : pathname;
+  const routeParam = activeView.endsWith('/detail') ? pathname.split('/').pop() || null : null;
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   // Multi-Tenancy State
@@ -128,35 +138,12 @@ export default function App() {
   // Core Data Collections (Scoping by Organization)
   const [users, setUsers] = useState<User[]>(SEED_USERS);
   const [leads, setLeads] = useState<Lead[]>(SEED_LEADS);
-  const [deals, setDeals] = useState<Deal[]>(() => {
-    try {
-      const savedDeals = window.localStorage.getItem('wordbitx:deals');
-      const parsedDeals = savedDeals ? JSON.parse(savedDeals) : null;
-      return Array.isArray(parsedDeals) ? parsedDeals as Deal[] : SEED_DEALS;
-    } catch {
-      return SEED_DEALS;
-    }
-  });
-  const [customers, setCustomers] = useState<Customer[]>(() => {
-    try {
-      const storedCustomers = window.localStorage.getItem('wordbitx:customers');
-      const parsedCustomers = storedCustomers ? JSON.parse(storedCustomers) : null;
-      return Array.isArray(parsedCustomers) ? parsedCustomers as Customer[] : SEED_CUSTOMERS;
-    } catch {
-      return SEED_CUSTOMERS;
-    }
-  });
+  const [deals, setDeals] = useState<Deal[]>(SEED_DEALS);
+  const [customers, setCustomers] = useState<Customer[]>(SEED_CUSTOMERS);
   const [tickets, setTickets] = useState<Ticket[]>(SEED_TICKETS);
   const [tasks, setTasks] = useState<Task[]>(SEED_TASKS);
-  const [orders, setOrders] = useState<Order[]>(() => {
-    try {
-      const storedOrders = window.localStorage.getItem('wordbitx:orders');
-      const parsedOrders = storedOrders ? JSON.parse(storedOrders) : null;
-      return Array.isArray(parsedOrders) ? parsedOrders as Order[] : [];
-    } catch {
-      return [];
-    }
-  });
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [hasRestoredLocalData, setHasRestoredLocalData] = useState(false);
 
   // Modals State
   const [isLeadModalOpen, setIsLeadModalOpen] = useState(false);
@@ -179,7 +166,6 @@ export default function App() {
   const [newTaskDueDate, setNewTaskDueDate] = useState('');
 
   // Authentication State
-  const [isAuthenticated, setIsAuthenticated] = useState(true);
   const currentOrg = organizations.find((o) => o.id === currentOrgId) || organizations[0];
   const currentUser: User = users.find((u) => u.organizationId === currentOrgId) || users[0];
 
@@ -193,21 +179,44 @@ export default function App() {
   const scopedUsers = users.filter((u) => u.organizationId === currentOrgId);
 
   useEffect(() => {
+    const restore = <T,>(key: string, fallback: T): T => {
+      const stored = window.localStorage.getItem(key);
+      if (!stored) return fallback;
+      try {
+        return JSON.parse(stored) as T;
+      } catch (error) {
+        console.error(`Unable to restore ${key} from local storage`, error);
+        return fallback;
+      }
+    };
+
+    setCustomers(restore<Customer[]>('wordbitx:customers', SEED_CUSTOMERS));
+    setDeals(restore<Deal[]>('wordbitx:deals', SEED_DEALS));
+    setOrders(restore<Order[]>('wordbitx:orders', []));
+    setHasRestoredLocalData(true);
+  }, []);
+
+  useEffect(() => {
+    if (!hasRestoredLocalData) return;
     window.localStorage.setItem('wordbitx:customers', JSON.stringify(customers));
-  }, [customers]);
+  }, [customers, hasRestoredLocalData]);
 
   useEffect(() => {
+    if (!hasRestoredLocalData) return;
     window.localStorage.setItem('wordbitx:deals', JSON.stringify(deals));
-  }, [deals]);
+  }, [deals, hasRestoredLocalData]);
 
   useEffect(() => {
+    if (!hasRestoredLocalData) return;
     window.localStorage.setItem('wordbitx:orders', JSON.stringify(orders));
-  }, [orders]);
+  }, [orders, hasRestoredLocalData]);
 
   // Navigate helper
   const navigate = (path: string, param?: string) => {
-    setCurrentRoute(path);
-    setRouteParam(param || null);
+    const targetPath = path.endsWith('/detail') && param
+      ? `${path.slice(0, -'/detail'.length)}/${encodeURIComponent(param)}`
+      : path;
+    router.push(targetPath);
     setMobileMenuOpen(false);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
@@ -586,7 +595,7 @@ export default function App() {
   });
 
   // Landing Page Route
-  if (currentRoute === '/') {
+  if (activeView === '/') {
     return (
       <div className="min-h-screen bg-slate-900 text-white flex flex-col selection:bg-indigo-500 selection:text-white">
         <header className="border-b border-slate-800 bg-slate-900/80 backdrop-blur sticky top-0 z-40 px-3 sm:px-6 py-3 sm:py-4 flex items-center justify-between">
@@ -602,14 +611,14 @@ export default function App() {
             <Button
               variant="ghost"
               size="sm"
-              onClick={() => setCurrentRoute('/login')}
+              onClick={() => router.push('/login')}
               className="text-slate-300 hover:text-white hover:bg-slate-800 text-xs sm:text-sm px-2.5 sm:px-3"
             >
               Sign In
             </Button>
             <Button
               size="sm"
-              onClick={() => setCurrentRoute('/register')}
+              onClick={() => router.push('/register')}
               className="bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs sm:text-sm px-3 sm:px-4"
             >
               <span className="hidden sm:inline">Create Workspace</span>
@@ -639,8 +648,7 @@ export default function App() {
             <Button
               size="lg"
               onClick={() => {
-                setIsAuthenticated(true);
-                setCurrentRoute('/dashboard');
+                router.push('/dashboard');
               }}
               className="w-full sm:w-auto bg-indigo-600 hover:bg-indigo-500 text-white px-6 sm:px-8 py-3 rounded-xl font-bold shadow-xl shadow-indigo-600/30 flex items-center justify-center space-x-2"
             >
@@ -650,7 +658,7 @@ export default function App() {
             <Button
               size="lg"
               variant="outline"
-              onClick={() => setCurrentRoute('/register')}
+              onClick={() => router.push('/register')}
               className="w-full sm:w-auto border-slate-700 bg-slate-800/80 text-white hover:bg-slate-800 px-6 sm:px-8 py-3 rounded-xl font-semibold"
             >
               Register Organization
@@ -662,7 +670,7 @@ export default function App() {
   }
 
   // Login Page Route
-  if (currentRoute === '/login') {
+  if (activeView === '/login') {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-900 p-3 sm:p-4">
         <Card className="w-full max-w-md border-slate-800 bg-slate-950/90 text-white shadow-2xl backdrop-blur">
@@ -678,9 +686,8 @@ export default function App() {
           <form
             onSubmit={(e) => {
               e.preventDefault();
-              setIsAuthenticated(true);
               toast.success('Signed in as Sarah Jenkins (Admin)');
-              setCurrentRoute('/dashboard');
+              router.push('/dashboard');
             }}
           >
             <CardContent className="space-y-4 p-4 sm:p-6 pt-2">
@@ -720,7 +727,7 @@ export default function App() {
               </Button>
               <button
                 type="button"
-                onClick={() => setCurrentRoute('/register')}
+                onClick={() => router.push('/register')}
                 className="text-xs text-indigo-400 hover:underline text-center"
               >
                 Need a new tenant workspace? Register Organization
@@ -733,7 +740,7 @@ export default function App() {
   }
 
   // Register Page Route
-  if (currentRoute === '/register') {
+  if (activeView === '/register') {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-900 p-3 sm:p-4">
         <Card className="w-full max-w-md border-slate-800 bg-slate-950/90 text-white shadow-2xl backdrop-blur">
@@ -757,9 +764,8 @@ export default function App() {
               };
               setOrganizations((prev) => [...prev, newOrg]);
               setCurrentOrgId(newOrgId);
-              setIsAuthenticated(true);
               toast.success('Organization registered successfully! Welcome to your new workspace.');
-              setCurrentRoute('/dashboard');
+              router.push('/dashboard');
             }}
           >
             <CardContent className="space-y-4 p-4 sm:p-6 pt-2">
@@ -787,7 +793,7 @@ export default function App() {
               </Button>
               <button
                 type="button"
-                onClick={() => setCurrentRoute('/login')}
+                onClick={() => router.push('/login')}
                 className="text-xs text-indigo-400 hover:underline text-center"
               >
                 Already registered? Sign In
@@ -804,7 +810,7 @@ export default function App() {
     <div className="flex min-h-screen bg-slate-50 dark:bg-slate-950 font-sans antialiased text-slate-900 dark:text-slate-100 overflow-x-hidden">
       {/* Navigation Sidebar (Desktop persistent + Mobile off-canvas drawer) */}
       <Sidebar
-        currentPath={currentRoute}
+        currentPath={activeView}
         onNavigate={(path) => navigate(path)}
         mobileOpen={mobileMenuOpen}
         onCloseMobile={() => setMobileMenuOpen(false)}
@@ -815,8 +821,7 @@ export default function App() {
           organizationName: currentOrg?.name || 'Acme Technologies Inc.',
         }}
         onLogout={() => {
-          setIsAuthenticated(false);
-          setCurrentRoute('/login');
+          router.push('/login');
           toast.info('Signed out of session');
         }}
       />
@@ -825,9 +830,9 @@ export default function App() {
       <div className="flex-1 flex flex-col min-w-0 pb-16 lg:pb-0">
         <Topbar
           title={
-            currentRoute === '/dashboard'
+            activeView === '/dashboard'
               ? 'Executive Dashboard'
-              : currentRoute.replace('/', '').replace('-', ' ')
+              : activeView.replace('/', '').replace('-', ' ')
           }
           organizations={organizations}
           currentOrgId={currentOrgId}
@@ -850,7 +855,7 @@ export default function App() {
 
         <main className="flex-1 p-3 sm:p-4 md:p-6 overflow-y-auto min-w-0">
           {/* VIEW: Dashboard */}
-          {currentRoute === '/dashboard' && (
+          {activeView === '/dashboard' && (
             <div className="space-y-4 sm:space-y-6">
               {/* Header */}
               <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pb-2 border-b border-slate-200 dark:border-slate-800">
@@ -968,7 +973,7 @@ export default function App() {
           )}
 
           {/* VIEW: Leads */}
-          {currentRoute === '/leads' && (
+          {activeView === '/leads' && (
             <div className="space-y-6">
               <div className="flex items-center justify-between">
                 <div>
@@ -997,7 +1002,7 @@ export default function App() {
           )}
 
           {/* VIEW: Lead Detail */}
-          {currentRoute === '/leads/detail' && (
+          {activeView === '/leads/detail' && (
             <div className="space-y-6 max-w-5xl mx-auto">
               <div className="flex items-center justify-between">
                 <Button variant="ghost" onClick={() => navigate('/leads')} className="space-x-1.5">
@@ -1081,7 +1086,7 @@ export default function App() {
           )}
 
           {/* VIEW: Pipeline */}
-          {currentRoute === '/pipeline' && (
+          {activeView === '/pipeline' && (
             <SalesPipeline
               deals={scopedDeals}
               users={scopedUsers}
@@ -1098,7 +1103,7 @@ export default function App() {
           )}
 
           {/* VIEW: Deal Detail */}
-          {currentRoute === '/deals/detail' && (() => {
+          {activeView === '/deals/detail' && (() => {
             const deal = scopedDeals.find((item) => item.id === routeParam);
             if (!deal) return <div className="rounded-lg border border-slate-200 bg-white p-10 text-center text-sm text-slate-500 dark:border-slate-800 dark:bg-slate-900">Deal not found</div>;
             return <DealDetails
@@ -1120,7 +1125,7 @@ export default function App() {
           })()}
 
           {/* VIEW: Customers */}
-          {currentRoute === '/customers' && (
+          {activeView === '/customers' && (
             <div className="space-y-6">
               <div className="flex items-center justify-between">
                 <div>
@@ -1153,7 +1158,7 @@ export default function App() {
           )}
 
           {/* VIEW: Customer Detail */}
-          {currentRoute === '/customers/detail' && (() => {
+          {activeView === '/customers/detail' && (() => {
             const customer = scopedCustomers.find((item) => item.id === routeParam);
             if (!customer) return <div className="rounded-lg border border-slate-200 bg-white p-10 text-center text-sm text-slate-500 dark:border-slate-800 dark:bg-slate-900">Customer not found</div>;
             return <CustomerDetails
@@ -1175,14 +1180,14 @@ export default function App() {
             />;
           })()}
 
-          {(currentRoute === '/orders' || currentRoute === '/orders/detail') && (
+          {(activeView === '/orders' || activeView === '/orders/detail') && (
             <OrderWorkspace
               orders={scopedOrders}
               customers={scopedCustomers}
               deals={scopedDeals}
               users={scopedUsers}
               currentUser={currentUser}
-              selectedOrderId={currentRoute === '/orders/detail' ? routeParam : null}
+              selectedOrderId={activeView === '/orders/detail' ? routeParam : null}
               onOrdersChange={(nextOrders) => setOrders((previous) => [
                 ...previous.filter((order) => order.organizationId !== currentOrgId),
                 ...nextOrders,
@@ -1193,7 +1198,7 @@ export default function App() {
           )}
 
           {/* VIEW: Tickets */}
-          {currentRoute === '/tickets' && (
+          {activeView === '/tickets' && (
             <div className="space-y-6">
               <div className="flex items-center justify-between">
                 <div>
@@ -1223,7 +1228,7 @@ export default function App() {
           )}
 
           {/* VIEW: Ticket Detail */}
-          {currentRoute === '/tickets/detail' && (
+          {activeView === '/tickets/detail' && (
             <div className="space-y-6 max-w-5xl mx-auto">
               <div className="flex items-center justify-between">
                 <Button variant="ghost" onClick={() => navigate('/tickets')} className="space-x-1.5">
@@ -1298,7 +1303,7 @@ export default function App() {
           )}
 
           {/* VIEW: Tasks */}
-          {currentRoute === '/tasks' && (
+          {activeView === '/tasks' && (
             <div className="space-y-6 max-w-4xl mx-auto">
               <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
                 <div>
@@ -1400,7 +1405,7 @@ export default function App() {
           )}
 
           {/* VIEW: Reports */}
-          {currentRoute === '/reports' && (
+          {activeView === '/reports' && (
             <div className="space-y-6">
               <div>
                 <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">Revenue & Sales Analytics</h1>
@@ -1455,7 +1460,7 @@ export default function App() {
           )}
 
           {/* VIEW: Settings */}
-          {currentRoute === '/settings' && (
+          {activeView === '/settings' && (
             <div className="space-y-6 max-w-4xl mx-auto">
               <div>
                 <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">Workspace Settings</h1>
@@ -1517,7 +1522,7 @@ export default function App() {
           )}
 
           {/* VIEW: Settings / Team */}
-          {currentRoute === '/settings/team' && (
+          {activeView === '/settings/team' && (
             <div className="space-y-6 max-w-5xl mx-auto">
               <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                 <div>
@@ -1625,7 +1630,7 @@ export default function App() {
 
       {/* Mobile Bottom Navigation Bar */}
       <MobileNav
-        currentPath={currentRoute}
+        currentPath={activeView}
         onNavigate={navigate}
         onOpenMenu={() => setMobileMenuOpen(true)}
       />

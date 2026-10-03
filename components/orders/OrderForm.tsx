@@ -1,3 +1,5 @@
+'use client';
+
 import React, { useEffect, useState } from 'react';
 import { Order, OrderItem, Deal, Customer, User, Priority } from '../../types/index.ts';
 import { orderSchema } from '../../lib/validations/orderSchema.ts';

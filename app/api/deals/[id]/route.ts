@@ -3,10 +3,11 @@ import connectToDatabase from '../../../../lib/mongodb.ts';
 import Deal from '../../../../models/Deal.ts';
 import { dealSchema } from '../../../../lib/validations/dealSchema.ts';
 
-export async function GET(request: Request, { params }: { params: { id: string } }) {
+export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
   try {
     await connectToDatabase();
-    const deal = await Deal.findById(params.id)
+    const deal = await Deal.findById(id)
       .populate('customerId', 'name company email phone avatarUrl')
       .populate('assignedToId', 'name email role avatarUrl')
       .populate('organizationId', 'name logoUrl')
@@ -25,7 +26,8 @@ export async function GET(request: Request, { params }: { params: { id: string }
   }
 }
 
-export async function PUT(request: Request, { params }: { params: { id: string } }) {
+export async function PUT(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
   try {
     const body = await request.json();
     const validation = dealSchema.partial().safeParse(body);
@@ -36,7 +38,7 @@ export async function PUT(request: Request, { params }: { params: { id: string }
 
     try {
       await connectToDatabase();
-      const current: any = await Deal.findById(params.id).lean();
+      const current: any = await Deal.findById(id).lean();
       if (!current) {
         return NextResponse.json({ error: 'Deal not found' }, { status: 404 });
       }
@@ -69,7 +71,7 @@ export async function PUT(request: Request, { params }: { params: { id: string }
         }, ...(current.activities || [])];
       }
       const updated = await Deal.findByIdAndUpdate(
-        params.id,
+        id,
         updateData,
         { new: true, runValidators: true }
       )
@@ -87,7 +89,7 @@ export async function PUT(request: Request, { params }: { params: { id: string }
       });
     } catch {
       return NextResponse.json({
-        id: params.id,
+        id,
         ...validation.data,
         updatedAt: new Date(),
       });
@@ -97,15 +99,16 @@ export async function PUT(request: Request, { params }: { params: { id: string }
   }
 }
 
-export async function DELETE(request: Request, { params }: { params: { id: string } }) {
+export async function DELETE(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
   try {
     try {
       await connectToDatabase();
-      await Deal.findByIdAndDelete(params.id);
+      await Deal.findByIdAndDelete(id);
     } catch {
       // Graceful
     }
-    return NextResponse.json({ success: true, id: params.id });
+    return NextResponse.json({ success: true, id });
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }

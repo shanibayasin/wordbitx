@@ -1,3 +1,5 @@
+'use client';
+
 import React, { useMemo, useState } from 'react';
 import { Badge } from '../ui/Badge.tsx';
 import { Button } from '../ui/Button.tsx';

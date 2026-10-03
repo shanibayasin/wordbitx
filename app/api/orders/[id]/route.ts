@@ -4,10 +4,11 @@ import Order from '../../../../models/Order.ts';
 import { orderSchema } from '../../../../lib/validations/orderSchema.ts';
 import { calculateOrderTotals, getNextOrderStatuses, getPaymentStatus } from '../../../../components/orders/orderMath.ts';
 
-export async function GET(_request: Request, { params }: { params: { id: string } }) {
+export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
   try {
     await connectToDatabase();
-    const order = await Order.findById(params.id)
+    const order = await Order.findById(id)
       .populate('customerId', 'name company email phone address city state country postalCode')
       .populate('dealId', 'title value stage probability assignedToId expectedCloseDate')
       .populate('salespersonId', 'name email role')
@@ -26,13 +27,14 @@ export async function GET(_request: Request, { params }: { params: { id: string 
   }
 }
 
-export async function PUT(request: Request, { params }: { params: { id: string } }) {
+export async function PUT(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
   try {
     const body = await request.json();
     const parsed = orderSchema.partial().safeParse(body);
     if (!parsed.success) return NextResponse.json({ errors: parsed.error.flatten() }, { status: 400 });
     await connectToDatabase();
-    const current: any = await Order.findById(params.id).lean();
+    const current: any = await Order.findById(id).lean();
     if (!current) return NextResponse.json({ error: 'Order not found' }, { status: 404 });
 
     const now = new Date();
@@ -83,7 +85,7 @@ export async function PUT(request: Request, { params }: { params: { id: string }
       update.status = fullyRefunded ? 'REFUNDED' : current.status;
     }
 
-    const updated = await Order.findByIdAndUpdate(params.id, update, { new: true, runValidators: true })
+    const updated = await Order.findByIdAndUpdate(id, update, { new: true, runValidators: true })
       .populate('customerId', 'name company email phone')
       .populate('dealId', 'title value stage')
       .populate('salespersonId', 'name email')

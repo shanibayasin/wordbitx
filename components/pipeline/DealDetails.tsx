@@ -1,3 +1,5 @@
+'use client';
+
 import React, { useMemo, useState } from 'react';
 import { Deal, DealActivity, DealCall, DealNote, DealStage, Customer, Task, User } from '../../types/index.ts';
 import { formatDate } from '../../lib/utils.ts';

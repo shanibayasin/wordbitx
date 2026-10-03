@@ -1,6 +1,14 @@
 import mongoose, { Schema, Document, Model } from 'mongoose';
 
-export type LeadStatusType = 'NEW' | 'FOLLOW_UP' | 'QUALIFIED' | 'LOST';
+export type LeadStatusType =
+  | 'NEW'
+  | 'CONTACTED'
+  | 'FOLLOW_UP'
+  | 'QUALIFIED'
+  | 'PROPOSAL'
+  | 'NEGOTIATION'
+  | 'CONVERTED'
+  | 'LOST';
 
 export interface ILead extends Document {
   name: string;
@@ -42,7 +50,7 @@ const LeadSchema = new Schema<ILead>(
     },
     status: {
       type: String,
-      enum: ['NEW', 'FOLLOW_UP', 'QUALIFIED', 'LOST'],
+      enum: ['NEW', 'CONTACTED', 'FOLLOW_UP', 'QUALIFIED', 'PROPOSAL', 'NEGOTIATION', 'CONVERTED', 'LOST'],
       default: 'NEW',
     },
     organizationId: {

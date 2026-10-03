@@ -5,10 +5,11 @@ import Deal from '../../../../models/Deal.ts';
 import Ticket from '../../../../models/Ticket.ts';
 import { customerSchema } from '../../../../lib/validations/customerSchema.ts';
 
-export async function GET(request: Request, { params }: { params: { id: string } }) {
+export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
   try {
     await connectToDatabase();
-    const customer = await Customer.findById(params.id)
+    const customer = await Customer.findById(id)
       .populate('organizationId', 'name logoUrl')
       .lean();
 
@@ -16,11 +17,11 @@ export async function GET(request: Request, { params }: { params: { id: string }
       return NextResponse.json({ error: 'Customer not found' }, { status: 404 });
     }
 
-    const deals = await Deal.find({ customerId: params.id })
+    const deals = await Deal.find({ customerId: id })
       .populate('assignedToId', 'name email')
       .lean();
 
-    const tickets = await Ticket.find({ customerId: params.id })
+    const tickets = await Ticket.find({ customerId: id })
       .populate('assignedToId', 'name email')
       .lean();
 
@@ -35,7 +36,8 @@ export async function GET(request: Request, { params }: { params: { id: string }
   }
 }
 
-export async function PUT(request: Request, { params }: { params: { id: string } }) {
+export async function PUT(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
   try {
     const body = await request.json();
     const validation = customerSchema.safeParse(body);
@@ -46,7 +48,7 @@ export async function PUT(request: Request, { params }: { params: { id: string }
 
     try {
       await connectToDatabase();
-      const updated = await Customer.findByIdAndUpdate(params.id, validation.data, {
+      const updated = await Customer.findByIdAndUpdate(id, validation.data, {
         new: true,
         runValidators: true,
       }).lean();
@@ -61,7 +63,7 @@ export async function PUT(request: Request, { params }: { params: { id: string }
       });
     } catch {
       return NextResponse.json({
-        id: params.id,
+        id,
         ...validation.data,
       });
     }
@@ -70,15 +72,16 @@ export async function PUT(request: Request, { params }: { params: { id: string }
   }
 }
 
-export async function DELETE(request: Request, { params }: { params: { id: string } }) {
+export async function DELETE(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
   try {
     try {
       await connectToDatabase();
-      await Customer.findByIdAndDelete(params.id);
+      await Customer.findByIdAndDelete(id);
     } catch {
       // Graceful
     }
-    return NextResponse.json({ success: true, id: params.id });
+    return NextResponse.json({ success: true, id });
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }

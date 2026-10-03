@@ -1,3 +1,5 @@
+'use client';
+
 import React, { useState } from 'react';
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '../ui/Table.tsx';
 import { Badge } from '../ui/Badge.tsx';

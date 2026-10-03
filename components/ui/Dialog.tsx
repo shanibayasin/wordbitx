@@ -1,3 +1,5 @@
+'use client';
+
 import React, { useEffect } from 'react';
 import { cn } from '../../lib/utils.ts';
 import { X } from 'lucide-react';

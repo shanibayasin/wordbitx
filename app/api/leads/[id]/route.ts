@@ -3,10 +3,11 @@ import connectToDatabase from '../../../../lib/mongodb.ts';
 import Lead from '../../../../models/Lead.ts';
 import { leadSchema } from '../../../../lib/validations/leadSchema.ts';
 
-export async function GET(request: Request, { params }: { params: { id: string } }) {
+export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
   try {
     await connectToDatabase();
-    const lead = await Lead.findById(params.id)
+    const lead = await Lead.findById(id)
       .populate('assignedToId', 'name email role avatarUrl')
       .populate('organizationId', 'name logoUrl')
       .lean();
@@ -24,7 +25,8 @@ export async function GET(request: Request, { params }: { params: { id: string }
   }
 }
 
-export async function PUT(request: Request, { params }: { params: { id: string } }) {
+export async function PUT(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
   try {
     const body = await request.json();
     const validation = leadSchema.safeParse(body);
@@ -36,7 +38,7 @@ export async function PUT(request: Request, { params }: { params: { id: string }
     try {
       await connectToDatabase();
       const updated = await Lead.findByIdAndUpdate(
-        params.id,
+        id,
         { ...validation.data, updatedAt: new Date() },
         { new: true }
       )
@@ -53,7 +55,7 @@ export async function PUT(request: Request, { params }: { params: { id: string }
       });
     } catch {
       return NextResponse.json({
-        id: params.id,
+        id,
         ...validation.data,
         updatedAt: new Date(),
       });
@@ -63,15 +65,16 @@ export async function PUT(request: Request, { params }: { params: { id: string }
   }
 }
 
-export async function DELETE(request: Request, { params }: { params: { id: string } }) {
+export async function DELETE(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
   try {
     try {
       await connectToDatabase();
-      await Lead.findByIdAndDelete(params.id);
+      await Lead.findByIdAndDelete(id);
     } catch {
       // Graceful delete confirmation
     }
-    return NextResponse.json({ success: true, id: params.id });
+    return NextResponse.json({ success: true, id });
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }

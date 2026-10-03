@@ -3,10 +3,11 @@ import connectToDatabase from '../../../../lib/mongodb.ts';
 import Ticket from '../../../../models/Ticket.ts';
 import { ticketSchema } from '../../../../lib/validations/ticketSchema.ts';
 
-export async function GET(request: Request, { params }: { params: { id: string } }) {
+export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
   try {
     await connectToDatabase();
-    const ticket = await Ticket.findById(params.id)
+    const ticket = await Ticket.findById(id)
       .populate('customerId', 'name company email phone avatarUrl')
       .populate('assignedToId', 'name email role avatarUrl')
       .populate('organizationId', 'name logoUrl')
@@ -25,7 +26,8 @@ export async function GET(request: Request, { params }: { params: { id: string }
   }
 }
 
-export async function PUT(request: Request, { params }: { params: { id: string } }) {
+export async function PUT(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
   try {
     const body = await request.json();
     const validation = ticketSchema.partial().safeParse(body);
@@ -37,7 +39,7 @@ export async function PUT(request: Request, { params }: { params: { id: string }
     try {
       await connectToDatabase();
       const updated = await Ticket.findByIdAndUpdate(
-        params.id,
+        id,
         { ...validation.data, updatedAt: new Date() },
         { new: true }
       )
@@ -55,7 +57,7 @@ export async function PUT(request: Request, { params }: { params: { id: string }
       });
     } catch {
       return NextResponse.json({
-        id: params.id,
+        id,
         ...validation.data,
         updatedAt: new Date(),
       });
@@ -65,15 +67,16 @@ export async function PUT(request: Request, { params }: { params: { id: string }
   }
 }
 
-export async function DELETE(request: Request, { params }: { params: { id: string } }) {
+export async function DELETE(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
   try {
     try {
       await connectToDatabase();
-      await Ticket.findByIdAndDelete(params.id);
+      await Ticket.findByIdAndDelete(id);
     } catch {
       // Graceful
     }
-    return NextResponse.json({ success: true, id: params.id });
+    return NextResponse.json({ success: true, id });
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }

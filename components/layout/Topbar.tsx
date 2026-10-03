@@ -1,3 +1,5 @@
+'use client';
+
 import React, { useState } from 'react';
 import { Search, Bell, Plus, Shield, Menu, X, ChevronDown } from 'lucide-react';
 import { Button } from '../ui/Button.tsx';

@@ -1,3 +1,5 @@
+'use client';
+
 import React, { useEffect, useState } from 'react';
 import { Deal, DealStage, Customer, User } from '../../types/index.ts';
 import { dealSchema } from '../../lib/validations/dealSchema.ts';

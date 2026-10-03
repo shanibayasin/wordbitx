@@ -110,7 +110,9 @@ export function LeadAdvancedTable({
       .filter((lead) => {
         const matchesSearch =
           !normalizedSearch ||
-          [lead.name, lead.company, lead.email, lead.phone].filter(Boolean).some((value) => value.toString().toLowerCase().includes(normalizedSearch));
+          [lead.name, lead.company, lead.email, lead.phone]
+            .filter((value): value is string => typeof value === 'string')
+            .some((value) => value.toLowerCase().includes(normalizedSearch));
 
         const matchesStatus = filters.status === 'ALL' || lead.status === filters.status;
         const matchesSource = filters.source === 'ALL' || lead.source === filters.source;
